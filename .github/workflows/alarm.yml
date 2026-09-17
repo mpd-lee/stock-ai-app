@@ -1,0 +1,21 @@
+name: Auto Stock Alert
+
+on:
+  schedule:
+    # 평일(월~금) 한국 시간 오전 9시~오후 3시 매시간 정각 실행
+    - cron: '0 0-6 * * 1-5'
+  workflow_dispatch: # 수동 테스트용 버튼
+
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install requests pandas
+      - name: Run alert script
+        run: python auto_alert.py
