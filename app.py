@@ -62,34 +62,33 @@ def get_realtime_naver_finance(code):
 # 🖥️ 웹 UI 메인 화면 구성
 # ==========================================
 st.title("🦅 AI 퀀트 : 상위 1% 매매 시스템")
-st.markdown("안정적인 아침 픽과 실시간 돌발 호재를 완벽히 분리한 0초 지연 시스템입니다.")
+st.markdown("정규장부터 밤 8시 애프터마켓까지 0초 지연으로 실시간 분석하는 시스템입니다.")
 
 # 탭 메뉴 구성 (1. 실시간 주도주 TOP 5 / 2. 장중 긴급 레이더)
-tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중 긴급 레이더"])
+tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중/야간 긴급 레이더"])
 
 # ==========================================
 # [탭 1] 실시간 주도주 TOP 5
 # ==========================================
 with tab1:
-    st.info("⏰ 버튼을 누르면 현재 시장 데이터를 스캔하여 돈이 가장 많이 몰린 TOP 5를 즉시 추출합니다. (장외 시간엔 직전 마감 기준)")
+    st.info("⏰ 버튼을 누르면 현재 시장(정규장 및 밤 8시까지의 애프터마켓) 데이터를 스캔하여 돈이 가장 많이 몰린 TOP 5를 즉시 추출합니다.")
     
     if st.button("🔄 실시간 TOP 5 스캔 (0초 지연)", use_container_width=True):
         
-        with st.spinner("네이버 금융 실시간 호가창 데이터를 분석 중입니다..."):
+        with st.spinner("네이버 금융 실시간 데이터를 분석 중입니다..."):
             results = []
             for code, name in TICKERS.items():
                 data = get_realtime_naver_finance(code)
                 if data and data["price"] > 0:
-                    # 퀀트 스코어 계산 공식: 등락률 * (거래량 / 10,000)
                     score = data["rate"] * (data["volume"] / 10000)
                     results.append({
                         "code": code, "name": name, 
                         "price": data["price"], "rate": data["rate"], "score": score
                     })
             
-            # 장외 시간(주말/밤)이라 실시간 데이터를 못 가져올 경우를 위한 안전한 Fallback 데이터
+            # 주말이나 밤 8시 이후 완전 마감 시간일 경우의 방어 데이터
             if not results:
-                st.warning("⚠️ 현재 주식 시장 마감 시간입니다. 직전 거래일 마감 데이터 기준으로 시뮬레이션 스캔합니다.")
+                st.warning("⚠️ 현재 주식 시장(애프터마켓 포함) 마감 시간입니다. 직전 거래 기준 데이터로 시뮬레이션 스캔합니다.")
                 fallback_data = [
                     ("267260", "HD현대일렉트릭", 310000, 4.0, 500000),
                     ("000660", "SK하이닉스", 175000, 2.5, 4500000),
@@ -101,7 +100,6 @@ with tab1:
                     score = rate * (vol / 10000)
                     results.append({"code": code, "name": name, "price": price, "rate": rate, "score": score})
             
-            # 점수 높은 순으로 정렬 후 상위 5개 추출
             results.sort(key=lambda x: x["score"], reverse=True)
             top5 = results[:5]
             
@@ -121,41 +119,37 @@ with tab1:
                 col2.metric("🎯 익절가(+5%)", f"{target:,}원")
                 col3.metric("🛑 손절가(-3%)", f"{stop:,}원")
                 
-                # 🔗 정확한 개별 종목 네이버 모바일 호가창 링크
                 st.link_button(f"📈 {item['name']} 차트/호가창 바로가기", f"https://m.stock.naver.com/domestic/stock/{code}/total")
                 st.divider()
                 
-            st.info("💡 위 가격을 신한증권 '자동감시주문'에 그대로 입력해두시면 마음 편히 일상을 즐기실 수 있습니다!")
+            st.info("💡 밤 8시 애프터마켓 시간대에도 실시간으로 가격과 수급을 확인하며 대응하실 수 있습니다!")
 
 # ==========================================
-# [탭 2] 장중 긴급 레이더 (급등/급락 포착)
+# [탭 2] 장중/야간 긴급 레이더
 # ==========================================
 with tab2:
-    st.info("⚡ 장중에 갑자기 치솟거나 급락하는 주도주를 실시간으로 잡아내는 긴급 레이더입니다.")
+    st.info("⚡ 정규장 및 야간 애프터마켓 시간 동안 급등·급락하는 주도주의 변동성을 실시간으로 포착합니다.")
     
     if st.button("🚨 실시간 급등/급락 종목 스캔", use_container_width=True):
-        with st.spinner("장중 변동성 감지 스캔 중..."):
+        with st.spinner("변동성 감지 스캔 중..."):
             spike_results = []
             for code, name in TICKERS.items():
                 data = get_realtime_naver_finance(code)
                 if data and data["price"] > 0:
-                    # 등락률 절대값이 2.0% 이상인 종목 포착
                     if abs(data["rate"]) >= 2.0:
                         spike_results.append({
                             "code": code, "name": name,
                             "price": data["price"], "rate": data["rate"]
                         })
             
-            # 장외 시간일 경우 테스트용 긴급 감지 목록 제공
             if not spike_results:
-                st.warning("⚠️ 현재 장외 시간입니다. 아래는 장중 급등/급락 감지 시뮬레이션 예시입니다.")
+                st.warning("⚠️ 현재 애프터마켓 마감 시간 이후입니다. 아래는 변동성 감지 예시입니다.")
                 spike_results = [
                     {"code": "267260", "name": "HD현대일렉트릭", "price": 310000, "rate": 5.4},
                     {"code": "196170", "name": "알테오젠", "price": 350000, "rate": -3.2},
                     {"code": "042700", "name": "한미반도체", "price": 110000, "rate": 3.8}
                 ]
             
-            # 변동성(절대 등락률)이 큰 순서대로 정렬
             spike_results.sort(key=lambda x: abs(x["rate"]), reverse=True)
             
             st.success("🚨 긴급 레이더 스캔 완료!")
