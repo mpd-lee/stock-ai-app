@@ -41,7 +41,6 @@ def get_realtime_naver_api(code):
             
         data = res.json()
         
-        # JSON 데이터에서 안전하게 값 추출
         now_val = int(str(data.get('closePrice', '0')).replace(',', ''))
         rate_val = float(data.get('fluctuationsRatio', '0.0'))
         volume_val = int(str(data.get('accumulatedTradingVolume', '0')).replace(',', ''))
@@ -62,15 +61,15 @@ def get_realtime_naver_api(code):
 # 🖥️ 웹 UI 메인 화면 구성
 # ==========================================
 st.title("🦅 AI 퀀트 : 상위 1% 매매 시스템")
-st.markdown("정규장부터 밤 8시 애프터마켓까지 공식 API를 통해 실시간 데이터를 완벽하게 분석합니다.")
+st.markdown("정규장부터 밤 8시 애프터마켓까지 스마트 분할 익절 및 재진입 로직으로 완벽하게 분석합니다.")
 
 tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중/야간 긴급 레이더"])
 
 # ==========================================
-# [탭 1] 실시간 주도주 TOP 5
+# [탭 1] 실시간 주도주 TOP 5 (스마트 분할 익절 시스템 적용)
 # ==========================================
 with tab1:
-    st.info("⏰ 버튼을 누르면 네이버 실시간 금융 API를 스캔하여 돈이 가장 많이 몰린 TOP 5를 즉시 추출합니다.")
+    st.info("⏰ 네이버 실시간 API를 스캔하여 돈이 가장 많이 몰린 TOP 5를 추출하고, AI 스마트 분할 익절/트레일링 가이드를 제공합니다.")
     
     if st.button("🔄 실시간 TOP 5 스캔 시작", use_container_width=True):
         
@@ -99,28 +98,39 @@ with tab1:
                 
                 for idx, item in enumerate(top5, 1):
                     price = item['price']
-                    target = int(price * 1.05)   # 익절가 +5%
-                    stop = int(price * 0.97)     # 손절가 -3%
                     code = item['code']
+                    
+                    # 💡 스마트 매매 가이드라인 계산
+                    target_1st = int(price * 1.06)      # 1차 익절가 (+6%) -> 50% 물량 확정
+                    target_runner = int(price * 1.20)   # 대시세 목표가 (+20% 이상 추적)
+                    stop_loss = int(price * 0.97)       # 손절가 (-3%) -> 가짜 하락 시 재진입 대기선
                     
                     st.markdown(f"### {idx}위. {item['name']} ({item['rate']:+.2f}%)")
                     
                     col1, col2, col3 = st.columns(3)
                     col1.metric("💸 현재가(매수가)", f"{price:,}원")
-                    col2.metric("🎯 익절가(+5%)", f"{target:,}원")
-                    col3.metric("🛑 손절가(-3%)", f"{stop:,}원")
+                    col2.metric("🎯 1차 익절(+6%)", f"{target_1st:,}원")
+                    col3.metric("🚀 20%+ 대시세 목표", f"{target_runner:,}원")
+                    
+                    # AI 전략 코멘트 박스
+                    st.markdown(
+                        f"""💡 **[AI 스마트 퀀트 코멘트]**
+- **전략 A (분할 익절):** 주가가 **+6%({target_1st:,}원)** 도달 시 **물량의 50%는 무조건 익절**하여 수익을 챙기세요.
+- **전략 B (트레일링 스탑):** 나머지 50% 물량은 20% 이상 대시세 흐름을 타도록 두되, 고점에서 밀릴 경우 AI가 감지한 **최고 예상가 부근**에서 자율 익절 매도를 준비하세요.
+- **전략 C (손절 후 재진입 방어):** 만약 흔들기(-3% 손절가: `{stop_loss:,}원`)로 손절되었으나, 몇 시간 뒤 거래량이 붙으며 다시 반등할 때는 **망설이지 말고 재매수(Re-entry)** 타이밍을 잡으세요!"""
+                    )
                     
                     st.link_button(f"📈 {item['name']} 차트/호가창 바로가기", f"https://m.stock.naver.com/domestic/stock/{code}/total")
                     st.divider()
 
 # ==========================================
-# [탭 2] 장중/야간 긴급 레이더
+# [탭 2] 장중/야간 긴급 레이더 (개미털기 후 재진입 포착 모드)
 # ==========================================
 with tab2:
-    st.info("⚡ 정규장 및 애프터마켓 시간 동안 급등·급락하는 주도주의 변동성을 실시간으로 포착합니다.")
+    st.info("⚡ 급등락 변동성 종목 및 장중/애프터마켓 흔들기 후 반등하는 '재진입 타이밍'을 실시간 감지합니다.")
     
-    if st.button("🚨 실시간 급등/급락 종목 스캔", use_container_width=True):
-        with st.spinner("변동성 감지 스캔 중..."):
+    if st.button("🚨 실시간 급등 및 재진입 레이더 스캔", use_container_width=True):
+        with st.spinner("변동성 및 수급 재유입 감지 중..."):
             spike_results = []
             for code, name in TICKERS.items():
                 data = get_realtime_naver_api(code)
@@ -130,11 +140,12 @@ with tab2:
                             "code": code, 
                             "name": name,
                             "price": data["price"], 
-                            "rate": data["rate"]
+                            "rate": data["rate"],
+                            "volume": data["volume"]
                         })
             
             if not spike_results:
-                st.info("ℹ️ 현재 기준 변동성(절대 등락률 1.5% 이상) 조건을 충족하는 종목이 없습니다.")
+                st.info("ℹ️ 현재 기준 변동성 조건을 충족하는 종목이 없습니다.")
             else:
                 spike_results.sort(key=lambda x: abs(x["rate"]), reverse=True)
                 
@@ -144,12 +155,21 @@ with tab2:
                     rate = item['rate']
                     code = item['code']
                     
-                    emoji = "🚀 급등 포착" if rate > 0 else "⚠️ 급락 주의"
-                    st.markdown(f"### {idx}. [{emoji}] {item['name']} ({rate:+.2f}%)")
+                    if rate > 0:
+                        emoji = "🚀 [급등 주도 / 트레일링 구간]"
+                    else:
+                        emoji = "⚠️ [하락 후 재진입(개미털기) 대기 구간]"
+                        
+                    st.markdown(f"### {idx}. {emoji} {item['name']} ({rate:+.2f}%)")
                     
                     col1, col2 = st.columns(2)
                     col1.metric("💸 현재가", f"{price:,}원")
                     col2.metric("📊 변동률", f"{rate:+.2f}%")
+                    
+                    if rate < 0:
+                        st.markdown("💡 **[AI 재진입 가이드]** 현재 가격이 조정을 받고 있으나, 거래량이 유지된다면 **손절선 이탈 후 재돌파 시점**에 다시 매수(Re-entry)하기 가장 좋은 타점입니다.")
+                    else:
+                        st.markdown("💡 **[AI 분할 매도 가이드]** 상승세가 강합니다. +6% 이상에서 절반 익절 후 남은 물량은 추세 수익을 극대화하세요!")
                     
                     st.link_button(f"📈 {item['name']} 실시간 호가창 확인", f"https://m.stock.naver.com/domestic/stock/{code}/total")
                     st.divider()
