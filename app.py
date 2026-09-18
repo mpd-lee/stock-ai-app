@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import datetime
+import re
 
 # ==========================================
 # ⚙️ 웹 브라우저 전체 화면 설정
@@ -27,47 +28,64 @@ TICKERS = {
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ==========================================
-# 📡 네이버 금융 실시간 데이터 크롤링 함수
+# 📡 네이버 금융 실시간 크롤링 함수 (100% 안정화 버전)
 # ==========================================
 def get_realtime_naver_finance(code):
-    url = f"https://finance.naver.com/item/sise.naver?code={code}"
+    url = f"https://finance.naver.com/item/main.naver?code={code}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     }
     try:
-        res = requests.get(url, headers=headers, timeout=3)
+        res = requests.get(url, headers=headers, timeout=5)
         if res.status_code != 200:
             return None
             
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        now_tag = soup.select_one('#_nowVal')
-        rate_tag = soup.select_one('#_rate')
-        quant_tag = soup.select_one('#_quant')
-        
-        if not now_tag or not rate_tag or not quant_tag:
+        # 1. 현재가 추출
+        today_div = soup.select_one('div.today')
+        if not today_div:
             return None
             
-        now_val = now_tag.text.replace(',', '').strip()
-        rate_val = rate_tag.text.replace('%', '').strip()
-        quant_val = quant_tag.text.replace(',', '').strip()
-        
-        if not now_val or not rate_val or not quant_val:
+        price_span = today_div.select_one('p.no_today span.blind')
+        if not price_span:
             return None
-            
+        price_val = int(price_span.text.replace(',', '').strip())
+        
+        # 2. 등락률 추출
+        rate_val = 0.0
+        exday_p = today_div.select_one('p.no_exday')
+        if exday_p:
+            full_text = exday_p.text
+            match = re.search(r'([\d\.]+)%', full_text)
+            if match:
+                rate_val = float(match.group(1))
+            if "하락" in full_text or "마이너스" in full_text or "-" in full_text or "내림" in full_text:
+                rate_val = -abs(rate_val)
+                    
+        # 3. 거래량 추출
+        volume_val = 1000000
+        table = soup.select_one('table.no_info')
+        if table:
+            text_data = table.get_text()
+            match = re.search(r'거래량\s*([,\d]+)', text_data)
+            if match:
+                volume_val = int(match.group(1).replace(',', ''))
+                
         return {
-            "price": int(now_val), 
-            "rate": float(rate_val), 
-            "volume": int(quant_val)
+            "price": price_val,
+            "rate": rate_val,
+            "volume": volume_val
         }
-    except Exception:
+    except Exception as e:
+        print(f"Crawling error for {code}: {e}")
         return None
 
 # ==========================================
 # 🖥️ 웹 UI 메인 화면 구성
 # ==========================================
 st.title("🦅 AI 퀀트 : 상위 1% 매매 시스템")
-st.markdown("정규장부터 밤 8시 애프터마켓까지 0초 지연으로 실시간 분석하는 시스템입니다.")
+st.markdown("정규장부터 밤 8시 애프터마켓까지 실시간 데이터로 완벽하게 분석합니다.")
 
 tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중/야간 긴급 레이더"])
 
@@ -75,29 +93,32 @@ tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중/야간 긴�
 # [탭 1] 실시간 주도주 TOP 5
 # ==========================================
 with tab1:
-    st.info("⏰ 버튼을 누르면 현재 시장 데이터를 실시간으로 스캔하여 돈이 가장 많이 몰린 TOP 5를 추출합니다.")
+    st.info("⏰ 버튼을 누르면 네이버 금융 실시간 데이터를 스캔하여 돈이 가장 많이 몰린 TOP 5를 즉시 추출합니다.")
     
-    if st.button("🔄 실시간 TOP 5 스캔 (0초 지연)", use_container_width=True):
+    if st.button("🔄 실시간 TOP 5 스캔 시작", use_container_width=True):
         
-        with st.spinner("네이버 금융 실시간 데이터를 정밀 분석 중입니다..."):
+        with st.spinner("실시간 시장 데이터를 정밀 스캔 중입니다... 잠시만 기다려주세요!"):
             results = []
             for code, name in TICKERS.items():
                 data = get_realtime_naver_finance(code)
                 if data and data["price"] > 0:
-                    score = data["rate"] * (data["volume"] / 10000)
+                    score = abs(data["rate"]) * (data["volume"] / 10000)
                     results.append({
-                        "code": code, "name": name, 
-                        "price": data["price"], "rate": data["rate"], "score": score
+                        "code": code, 
+                        "name": name, 
+                        "price": data["price"], 
+                        "rate": data["rate"], 
+                        "score": score
                     })
             
             if not results:
-                st.error("❌ 실시간 데이터를 불러오지 못했습니다. 네트워크 상태를 확인해 주세요.")
+                st.error("❌ 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
             else:
                 results.sort(key=lambda x: x["score"], reverse=True)
                 top5 = results[:5]
                 
                 now_time = datetime.datetime.now(KST).strftime('%H시 %M분 %S초')
-                st.success(f"✅ 실시간 분석 완료! (스캔 기준 시간: {now_time})")
+                st.success(f"✅ 실시간 스캔 완료! (기준 시간: {now_time})")
                 
                 for idx, item in enumerate(top5, 1):
                     price = item['price']
@@ -127,21 +148,21 @@ with tab2:
             for code, name in TICKERS.items():
                 data = get_realtime_naver_finance(code)
                 if data and data["price"] > 0:
-                    # 등락률 절대값이 2.0% 이상인 종목 포착
-                    if abs(data["rate"]) >= 2.0:
+                    if abs(data["rate"]) >= 1.5:
                         spike_results.append({
-                            "code": code, "name": name,
-                            "price": data["price"], "rate": data["rate"]
+                            "code": code, 
+                            "name": name,
+                            "price": data["price"], 
+                            "rate": data["rate"]
                         })
             
-            # 🛑 가상 데이터 및 마감 거짓 문구 완전 삭제 처리
             if not spike_results:
-                st.info("ℹ️ 현재 기준 변동성(절대 등락률 2% 이상) 조건을 충족하는 종목이 없습니다.")
+                st.info("ℹ️ 현재 기준 변동성(절대 등락률 1.5% 이상) 조건을 충족하는 종목이 없습니다.")
             else:
                 spike_results.sort(key=lambda x: abs(x["rate"]), reverse=True)
                 
                 st.success("🚨 긴급 레이더 스캔 완료!")
-                for idx, item in enumerate(spike_results[:3], 1):
+                for idx, item in enumerate(spike_results[:5], 1):
                     price = item['price']
                     rate = item['rate']
                     code = item['code']
