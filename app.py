@@ -1,80 +1,96 @@
 import streamlit as st
-import yfinance as yf
-import pandas as pd
-from datetime import datetime
-import pytz
+import requests
+from bs4 import BeautifulSoup
+import datetime
 
-st.set_page_config(page_title="AI 퀀트 자동매매", layout="centered")
+# ==========================================
+# ⚙️ 웹 브라우저 전체 화면 설정
+# ==========================================
+st.set_page_config(page_title="AI 퀀트 스나이퍼", page_icon="🦅", layout="centered")
 
+# ==========================================
+# 🎯 주도주 유니버스 설정
+# ==========================================
 TICKERS = {
-    "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "한미반도체": "042700.KS", "리노공업": "058470.KQ", 
-    "에코프로비엠": "247540.KQ", "알테오젠": "196170.KQ", "HLB": "028300.KQ", "현대로템": "064350.KS", 
-    "HD현대일렉트릭": "267260.KS", "삼양식품": "003230.KS", "NAVER": "035420.KS"
+    "005930": "삼성전자", "000660": "SK하이닉스", "042700": "한미반도체", "058470": "리노공업",
+    "373220": "LG에너지솔루션", "003670": "포스코퓨처엠", "247540": "에코프로비엠", "207940": "삼성바이오로직스",
+    "068270": "셀트리온", "196170": "알테오젠", "028300": "HLB", "012450": "한화에어로스페이스",
+    "079550": "LIG넥스원", "064350": "현대로템", "267260": "HD현대일렉트릭", "277810": "레인보우로보틱스",
+    "003230": "삼양식품", "035420": "NAVER"
 }
 
-# (기존 분석 함수 생략 없이 간단히 포함 - 실제로는 이전 답변의 로직을 그대로 유지합니다)
-@st.cache_data(ttl=60)
-def analyze_market(mode="morning"):
-    results = []
-    for name, ticker in TICKERS.items():
-        try:
-            df = yf.download(ticker, period="1mo", interval="1d", progress=False)
-            if df.empty or len(df) < 5: continue
-            
-            latest = df.iloc[-1]
-            prev = df.iloc[-2]
-            close_price = int(latest['Close'].item())
-            vol_ratio = (latest['Volume'].item() / prev['Volume'].item()) * 100 if prev['Volume'].item() > 0 else 100
-            
-            # 모드에 따른 로직 분리
-            score = 0
-            reason = ""
-            if mode == "morning":
-                # 아침용: 안정성 위주
-                if close_price > df['Close'].rolling(5).mean().iloc[-1]: score += 50
-                reason = "안정적 상승 추세"
-            elif mode == "live":
-                # 실시간용: 거래량 폭발 위주 (호재 반영)
-                if vol_ratio > 300: 
-                    score += 100
-                    reason = f"🔥 장중 긴급 호재 (거래량 {int(vol_ratio)}% 폭증!)"
+# ==========================================
+# 📡 실시간 0초 지연 데이터 크롤링 함수
+# ==========================================
+def get_realtime_naver_finance(code):
+    url = f"https://finance.naver.com/item/sise.naver?code={code}"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    try:
+        res = requests.get(url, headers=headers, timeout=3)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        # 네이버 금융에서 현재가, 등락률, 거래량 실시간 수집
+        now_val = soup.select_one('#_nowVal').text.replace(',', '')
+        rate_val = soup.select_one('#_rate').text.replace('%', '').strip()
+        quant_val = soup.select_one('#_quant').text.replace(',', '')
+        
+        return {"price": int(now_val), "rate": float(rate_val), "volume": int(quant_val)}
+    except Exception:
+        return None
 
-            if score > 0:
-                results.append({"name": name, "price": close_price, "reason": reason, "score": score})
-        except:
-            pass
-    return sorted(results, key=lambda x: x['score'], reverse=True)[:3]
-
-# --- UI 구성 ---
+# ==========================================
+# 🖥️ 웹 UI 화면 그리기 (근영님 아이디어 적용)
+# ==========================================
 st.title("🦅 AI 퀀트 : 상위 1% 매매 시스템")
-st.write("안정적인 아침 픽과 실시간 돌발 호재를 완벽히 분리했습니다.")
+st.markdown("안정적인 아침 픽과 실시간 돌발 호재를 완벽히 분리했습니다.")
 
-# 💡 투 트랙 탭 생성
-tab1, tab2 = st.tabs(["🌅 아침 확정 매매 (안정형)", "⚡ 장중 긴급 레이더 (공격형)"])
+# 탭 메뉴 구성
+tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중 긴급 레이더 (준비중)"])
 
-# 첫 번째 탭: 기존처럼 아침에 한 번만 확인하는 곳
 with tab1:
-    st.info("**⏰ 아침 08:45 전용** - 하루 딱 한 번만 눌러서 오늘의 주력 종목을 세팅하세요.")
-    if st.button("🔄 아침 픽스(Fix) 새로고침", key="morning_btn"):
-        st.cache_data.clear()
+    st.info("⏰ 8시 45분 단일 종목의 위험성을 없앴습니다. 버튼을 누르면 현재 돈이 가장 많이 몰리는 실시간 TOP 5를 즉시 스캔합니다.")
+    
+    # 새로운 새로고침 버튼 (UI 변화의 핵심)
+    if st.button("🔄 실시간 TOP 5 스캔 (0초 지연)", use_container_width=True):
         
-    signals = analyze_market(mode="morning")
-    if signals:
-        for s in signals:
-            st.success(f"🏆 주력 매수: **{s['name']}** (현재가 {s['price']:,}원) - {s['reason']}")
-    else:
-        st.warning("오늘은 보수적으로 접근하세요.")
-
-# 두 번째 탭: 장중에 심심할 때 눌러보거나 호재를 찾을 때 쓰는 곳
-with tab2:
-    st.error("**🔥 장중 09:00 ~ 15:30 전용** - 실시간으로 갑자기 돈이 몰리는 호재 종목을 찾습니다.")
-    if st.button("⚡ 실시간 호재 레이더 가동 (새로고침)", key="live_btn"):
-        st.cache_data.clear()
-        
-    live_signals = analyze_market(mode="live")
-    if live_signals and live_signals[0]['score'] >= 100:
-        for s in live_signals:
-            st.error(f"🚀 **긴급 포착!** **{s['name']}** (현재가 {s['price']:,}원) \n\n이유: {s['reason']}")
-            st.write("👉 즉시 증권사 뉴스를 확인하시고 짧게 단타(스캘핑)로 접근하세요!")
-    else:
-        st.write("현재 특이 거래량(호재)이 터진 종목이 없습니다. 평온한 상태입니다.")
+        with st.spinner("네이버 금융 실시간 호가창 데이터를 분석 중입니다..."):
+            results = []
+            for code, name in TICKERS.items():
+                data = get_realtime_naver_finance(code)
+                if data and data["price"] > 0:
+                    # 거래량과 등락률을 조합한 랭킹 스코어
+                    score = data["rate"] * (data["volume"] / 10000)
+                    results.append({
+                        "code": code, "name": name, 
+                        "price": data["price"], "rate": data["rate"], "score": score
+                    })
+            
+            # 점수순 정렬 후 상위 5개 자르기
+            results.sort(key=lambda x: x["score"], reverse=True)
+            top5 = results[:5]
+            
+            if not top5:
+                st.warning("데이터를 불러오지 못했습니다. 장이 열려있는지 확인해 주세요.")
+            else:
+                now_time = datetime.datetime.now().strftime('%H시 %M분 %S초')
+                st.success(f"✅ 분석 완료! (스캔 기준 시간: {now_time})")
+                
+                # TOP 5 화면에 예쁘게 출력
+                for idx, item in enumerate(top5, 1):
+                    price = item['price']
+                    target = int(price * 1.05) # 익절가 5%
+                    stop = int(price * 0.97)   # 손절가 -3%
+                    
+                    st.markdown(f"### {idx}위. {item['name']} ({item['rate']:+.2f}%)")
+                    
+                    # 3단 칼럼으로 가격 보기 좋게 배치
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("💸 현재가(매수가)", f"{price:,}원")
+                    col2.metric("🎯 익절가(+5%)", f"{target:,}원")
+                    col3.metric("🛑 손절가(-3%)", f"{stop:,}원")
+                    
+                    # 버튼 누르면 폰에서 네이버 호가창으로 바로 이동
+                    st.link_button(f"📈 {item['name']} 차트/호가창 바로가기", f"https://m.stock.naver.com/item/main.nhn?code={item['code']}")
+                    st.divider() # 구분선
+                    
+                st.info("💡 위 가격을 신한증권 '자동감시주문'에 그대로 입력해두시면 마음 편히 여행을 즐기실 수 있습니다!")
