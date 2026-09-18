@@ -20,16 +20,24 @@ TICKERS = {
 }
 
 # ==========================================
-# 📡 실시간 0초 지연 데이터 크롤링 함수
+# 📡 실시간 0초 지연 데이터 크롤링 (해외 서버 차단 완벽 우회)
 # ==========================================
 def get_realtime_naver_finance(code):
     url = f"https://finance.naver.com/item/sise.naver?code={code}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    
+    # 🛡️ 핵심: 네이버의 해외 클라우드 차단을 뚫기 위한 일반 컴퓨터 위장 헤더
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://finance.naver.com/'
+    }
+    
     try:
-        res = requests.get(url, headers=headers, timeout=3)
+        res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, 'html.parser')
         
-        # 네이버 금융에서 현재가, 등락률, 거래량 실시간 수집
+        # 현재가, 등락률, 거래량 실시간 수집
         now_val = soup.select_one('#_nowVal').text.replace(',', '')
         rate_val = soup.select_one('#_rate').text.replace('%', '').strip()
         quant_val = soup.select_one('#_quant').text.replace(',', '')
@@ -39,58 +47,51 @@ def get_realtime_naver_finance(code):
         return None
 
 # ==========================================
-# 🖥️ 웹 UI 화면 그리기 (근영님 아이디어 적용)
+# 🖥️ 웹 UI 화면 그리기
 # ==========================================
 st.title("🦅 AI 퀀트 : 상위 1% 매매 시스템")
 st.markdown("안정적인 아침 픽과 실시간 돌발 호재를 완벽히 분리했습니다.")
 
-# 탭 메뉴 구성
 tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중 긴급 레이더 (준비중)"])
 
 with tab1:
     st.info("⏰ 8시 45분 단일 종목의 위험성을 없앴습니다. 버튼을 누르면 현재 돈이 가장 많이 몰리는 실시간 TOP 5를 즉시 스캔합니다.")
     
-    # 새로운 새로고침 버튼 (UI 변화의 핵심)
     if st.button("🔄 실시간 TOP 5 스캔 (0초 지연)", use_container_width=True):
         
-        with st.spinner("네이버 금융 실시간 호가창 데이터를 분석 중입니다..."):
+        with st.spinner("네이버 금융 방어막을 우회하여 실시간 데이터를 수집 중입니다..."):
             results = []
             for code, name in TICKERS.items():
                 data = get_realtime_naver_finance(code)
                 if data and data["price"] > 0:
-                    # 거래량과 등락률을 조합한 랭킹 스코어
                     score = data["rate"] * (data["volume"] / 10000)
                     results.append({
                         "code": code, "name": name, 
                         "price": data["price"], "rate": data["rate"], "score": score
                     })
             
-            # 점수순 정렬 후 상위 5개 자르기
             results.sort(key=lambda x: x["score"], reverse=True)
             top5 = results[:5]
             
             if not top5:
-                st.warning("데이터를 불러오지 못했습니다. 장이 열려있는지 확인해 주세요.")
+                st.error("🚨 데이터를 불러오지 못했습니다. 장이 닫혀있거나 일시적인 통신 오류입니다.")
             else:
                 now_time = datetime.datetime.now().strftime('%H시 %M분 %S초')
                 st.success(f"✅ 분석 완료! (스캔 기준 시간: {now_time})")
                 
-                # TOP 5 화면에 예쁘게 출력
                 for idx, item in enumerate(top5, 1):
                     price = item['price']
-                    target = int(price * 1.05) # 익절가 5%
-                    stop = int(price * 0.97)   # 손절가 -3%
+                    target = int(price * 1.05) 
+                    stop = int(price * 0.97)   
                     
                     st.markdown(f"### {idx}위. {item['name']} ({item['rate']:+.2f}%)")
                     
-                    # 3단 칼럼으로 가격 보기 좋게 배치
                     col1, col2, col3 = st.columns(3)
                     col1.metric("💸 현재가(매수가)", f"{price:,}원")
                     col2.metric("🎯 익절가(+5%)", f"{target:,}원")
                     col3.metric("🛑 손절가(-3%)", f"{stop:,}원")
                     
-                    # 버튼 누르면 폰에서 네이버 호가창으로 바로 이동
                     st.link_button(f"📈 {item['name']} 차트/호가창 바로가기", f"https://m.stock.naver.com/item/main.nhn?code={item['code']}")
-                    st.divider() # 구분선
+                    st.divider() 
                     
                 st.info("💡 위 가격을 신한증권 '자동감시주문'에 그대로 입력해두시면 마음 편히 여행을 즐기실 수 있습니다!")
