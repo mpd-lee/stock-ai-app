@@ -1,8 +1,6 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
 import datetime
-import re
 
 # ==========================================
 # ⚙️ 웹 브라우저 전체 화면 설정
@@ -28,64 +26,43 @@ TICKERS = {
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ==========================================
-# 📡 네이버 금융 실시간 크롤링 함수 (100% 안정화 버전)
+# 📡 네이버 모바일 API 실시간 데이터 수신 함수 (100% 안정화)
 # ==========================================
-def get_realtime_naver_finance(code):
-    url = f"https://finance.naver.com/item/main.naver?code={code}"
+def get_realtime_naver_api(code):
+    url = f"https://m.stock.naver.com/api/stock/{code}/basic"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Referer': f'https://m.stock.naver.com/domestic/stock/{code}/total'
     }
     try:
         res = requests.get(url, headers=headers, timeout=5)
         if res.status_code != 200:
             return None
             
-        soup = BeautifulSoup(res.text, 'html.parser')
+        data = res.json()
         
-        # 1. 현재가 추출
-        today_div = soup.select_one('div.today')
-        if not today_div:
+        # JSON 데이터에서 안전하게 값 추출
+        now_val = int(str(data.get('closePrice', '0')).replace(',', ''))
+        rate_val = float(data.get('fluctuationsRatio', '0.0'))
+        volume_val = int(str(data.get('accumulatedTradingVolume', '0')).replace(',', ''))
+        
+        if now_val <= 0:
             return None
             
-        price_span = today_div.select_one('p.no_today span.blind')
-        if not price_span:
-            return None
-        price_val = int(price_span.text.replace(',', '').strip())
-        
-        # 2. 등락률 추출
-        rate_val = 0.0
-        exday_p = today_div.select_one('p.no_exday')
-        if exday_p:
-            full_text = exday_p.text
-            match = re.search(r'([\d\.]+)%', full_text)
-            if match:
-                rate_val = float(match.group(1))
-            if "하락" in full_text or "마이너스" in full_text or "-" in full_text or "내림" in full_text:
-                rate_val = -abs(rate_val)
-                    
-        # 3. 거래량 추출
-        volume_val = 1000000
-        table = soup.select_one('table.no_info')
-        if table:
-            text_data = table.get_text()
-            match = re.search(r'거래량\s*([,\d]+)', text_data)
-            if match:
-                volume_val = int(match.group(1).replace(',', ''))
-                
         return {
-            "price": price_val,
+            "price": now_val,
             "rate": rate_val,
             "volume": volume_val
         }
     except Exception as e:
-        print(f"Crawling error for {code}: {e}")
+        print(f"API Error for {code}: {e}")
         return None
 
 # ==========================================
 # 🖥️ 웹 UI 메인 화면 구성
 # ==========================================
 st.title("🦅 AI 퀀트 : 상위 1% 매매 시스템")
-st.markdown("정규장부터 밤 8시 애프터마켓까지 실시간 데이터로 완벽하게 분석합니다.")
+st.markdown("정규장부터 밤 8시 애프터마켓까지 공식 API를 통해 실시간 데이터를 완벽하게 분석합니다.")
 
 tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중/야간 긴급 레이더"])
 
@@ -93,14 +70,14 @@ tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "⚡ 장중/야간 긴�
 # [탭 1] 실시간 주도주 TOP 5
 # ==========================================
 with tab1:
-    st.info("⏰ 버튼을 누르면 네이버 금융 실시간 데이터를 스캔하여 돈이 가장 많이 몰린 TOP 5를 즉시 추출합니다.")
+    st.info("⏰ 버튼을 누르면 네이버 실시간 금융 API를 스캔하여 돈이 가장 많이 몰린 TOP 5를 즉시 추출합니다.")
     
     if st.button("🔄 실시간 TOP 5 스캔 시작", use_container_width=True):
         
         with st.spinner("실시간 시장 데이터를 정밀 스캔 중입니다... 잠시만 기다려주세요!"):
             results = []
             for code, name in TICKERS.items():
-                data = get_realtime_naver_finance(code)
+                data = get_realtime_naver_api(code)
                 if data and data["price"] > 0:
                     score = abs(data["rate"]) * (data["volume"] / 10000)
                     results.append({
@@ -146,7 +123,7 @@ with tab2:
         with st.spinner("변동성 감지 스캔 중..."):
             spike_results = []
             for code, name in TICKERS.items():
-                data = get_realtime_naver_finance(code)
+                data = get_realtime_naver_api(code)
                 if data and data["price"] > 0:
                     if abs(data["rate"]) >= 1.5:
                         spike_results.append({
