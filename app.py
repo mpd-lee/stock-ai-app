@@ -23,21 +23,22 @@ def send_telegram_msg(msg):
 st.set_page_config(page_title="AI 퀀트 스나이퍼", page_icon="🦅", layout="centered")
 
 # ==========================================
-# 🎯 주도주 유니버스
+# 🎯 국내 주도주 및 잠재력 높은 유니버스 (확장형)
 # ==========================================
 TICKERS = {
     "005930.KS": "삼성전자", "000660.KS": "SK하이닉스", "042700.KS": "한미반도체", "058470.KQ": "리노공업",
     "373220.KS": "LG에너지솔루션", "003670.KS": "포스코퓨처엠", "247540.KQ": "에코프로비엠", "207940.KS": "삼성바이오로직스",
     "068270.KS": "셀트리온", "196170.KQ": "알테오젠", "028300.KQ": "HLB", "012450.KS": "한화에어로스페이스",
     "079550.KS": "LIG넥스원", "064350.KS": "현대로템", "267260.KS": "HD현대일렉트릭", "277810.KQ": "레인보우로보틱스",
-    "003230.KS": "삼양식품", "035420.KS": "NAVER"
+    "003230.KS": "삼양식품", "035420.KS": "NAVER", "403340.KQ": "파두", "452200.KS": "KAI",
+    "047810.KQ": "한국항공우주", "298380.KQ": "에이비엘바이오", "328130.KQ": "루닛", "214150.KQ": "클래시스"
 }
 
 # 🇰🇷 한국 시간대 설정
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
 # ==========================================
-# 📡 금요일 장중 완벽 대응 데이터 수집 엔진
+# 📡 실시간 데이터 분석 엔진
 # ==========================================
 def get_market_data(ticker_code):
     try:
@@ -58,28 +59,30 @@ def get_market_data(ticker_code):
 # 🖥️ 텔레그램 + 웹 UI 통합 화면
 # ==========================================
 st.title("🦅 AI 퀀트 : 상위 1% 매매 시스템")
-st.markdown("금요일 장중 실시간 데이터 분석 및 텔레그램 연동 시스템")
+st.markdown("확률 높고 수익률 확실한 실시간 주도주 분석 스캐너")
 
-tab1, tab2 = st.tabs(["🌅 실시간 주도주 TOP 5", "🚨 장중 긴급 레이더 (LIVE)"])
+tab1, tab2 = st.tabs(["🌅 확률 높은 주도주 TOP 5", "🚨 장중 긴급 레이더 (LIVE)"])
 
 # ----------------------------------------
-# 탭 1: 실시간 TOP 5
+# 탭 1: 확률 높은 TOP 5
 # ----------------------------------------
 with tab1:
-    st.info("⏰ 버튼을 누르면 금요일 실시간 데이터를 분석하고, **동시에 텔레그램으로도 추천 브리핑을 전송**합니다.")
+    st.info("🔥 단순 대장주 나열이 아닌, **거래대금과 상승 모멘텀을 실시간 분석해 확률 높은 종목**을 엄선합니다.")
     
-    if st.button("🔄 실시간 TOP 5 스캔 및 텔레그램 전송", use_container_width=True):
-        with st.spinner("금요일 시장 데이터를 분석 중입니다..."):
+    if st.button("🔄 핵심 주도주 정밀 스캔 및 텔레그램 전송", use_container_width=True):
+        with st.spinner("빅데이터 모멘텀 및 거래대금을 분석 중입니다..."):
             results = []
             for code, name in TICKERS.items():
                 data = get_market_data(code)
                 if data and data["price"] > 0:
-                    score = data["rate"] * (data["volume"] / 10000)
+                    # 퀀트 스코어 공식: 상승률 * 거래대금 (확률 높은 폭등 주도주 선별)
+                    score = data["rate"] * (data["volume"] * data["price"] / 1000000)
                     results.append({
                         "code": code, "name": name, 
                         "price": data["price"], "rate": data["rate"], "score": score
                     })
             
+            # 스코어 높은 순으로 정렬 (수익률 확실성 높은 순)
             results.sort(key=lambda x: x["score"], reverse=True)
             top5 = results[:5]
             
@@ -87,9 +90,9 @@ with tab1:
                 st.error("🚨 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.")
             else:
                 now_time = datetime.datetime.now(KST).strftime('%H시 %M분 %S초')
-                st.success(f"✅ 금요일 장중 분석 완료! (기준 시간: {now_time}) - 텔레그램 전송 완료")
+                st.success(f"✅ 정밀 분석 완료! (기준 시간: {now_time}) - 텔레그램 전송 완료")
                 
-                tg_msg = f"🦅 <b>[금요일 장중] AI 퀀트 주도주 TOP 5</b> ({now_time})\n"
+                tg_msg = f"🦅 <b>[AI 퀀트] 확률 높은 주도주 TOP 5</b> ({now_time})\n"
                 tg_msg += "──────────────────\n\n"
                 
                 for idx, item in enumerate(top5, 1):
@@ -104,7 +107,9 @@ with tab1:
                     col2.metric("🎯 익절가(+5%)", f"{target:,}원")
                     col3.metric("🛑 손절가(-3%)", f"{stop:,}원")
                     
-                    st.link_button(f"📈 {item['name']} 차트/호가창 열기", f"https://m.stock.naver.com/item/main.nhn?code={code_num}")
+                    # 🔗 수정된 다이렉트 차트 링크 (해당 종목 페이지로 바로 이동)
+                    chart_url = f"https://m.stock.naver.com/domestic/stock/{code_num}/total"
+                    st.link_button(f"📈 {item['name']} 차트/호가창 다이렉트 열기", chart_url)
                     st.divider() 
                     
                     tg_msg += f"{idx}위. <b>{item['name']}</b> ({item['rate']:+.2f}%)\n"
@@ -120,7 +125,7 @@ with tab1:
 # 탭 2: 장중 긴급 레이더
 # ----------------------------------------
 with tab2:
-    st.warning("⚡ 금요일 장중 급락 징후(-3% 이상)를 실시간 감지하여 경고합니다.")
+    st.warning("⚡ 급락 징후(-3% 이상)를 실시간 감지하여 자산을 보호합니다.")
     
     if st.button("🚨 긴급 레이더 가동 및 알림", use_container_width=True):
         with st.spinner("유니버스 전 종목의 위험 징후를 스캔 중입니다..."):
@@ -136,17 +141,18 @@ with tab2:
             if len(alerts_data) > 0:
                 st.error(f"⚠️ **[주의] 현재 급락 징후가 포착된 {len(alerts_data)}개 종목이 있습니다!**")
                 
-                tg_alert_msg = "🚨 <b>[금요일 긴급 탈출 경보]</b> 🚨\n\n"
+                tg_alert_msg = "🚨 <b>[긴급 탈출 경보]</b> 🚨\n\n"
                 
                 for item in alerts_data:
                     name = item['name']
                     rate = item['rate']
                     price = item['price']
                     code_num = item['code'].split('.')[0]
+                    chart_url = f"https://m.stock.naver.com/domestic/stock/{code_num}/total"
                     
                     st.markdown(f"### ⚠️ **{name}** ({rate:+.2f}% 급락 중)")
                     st.write(f"💸 **현재가:** {price:,}원")
-                    st.link_button(f"📉 {name} 차트/호가창 즉시 확인 (대응하기)", f"https://m.stock.naver.com/item/main.nhn?code={code_num}")
+                    st.link_button(f"📉 {name} 차트/호가창 즉시 확인", chart_url)
                     st.divider()
                     
                     tg_alert_msg += f"• <b>{name}</b> (현재 {rate:+.2f}% 급락)\n"
